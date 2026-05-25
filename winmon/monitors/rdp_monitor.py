@@ -86,6 +86,15 @@ class RDPMonitor:
             self._watch_processes_wmi()
             return
 
+        # Seed known PIDs so processes already running at startup don't trigger alerts
+        for proc in psutil.process_iter(["pid", "name"]):
+            try:
+                if (proc.info["name"] or "").lower() in REMOTE_ACCESS_PROCESSES:
+                    self._known_remote_pids.add(proc.pid)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        log.info("RDP process scan seeded %d known PIDs", len(self._known_remote_pids))
+
         while self._running:
             try:
                 for proc in psutil.process_iter(["pid", "name", "exe", "username"]):
@@ -128,6 +137,14 @@ class RDPMonitor:
             log.error("Neither psutil nor wmi available for RDP process monitoring")
             return
 
+        # Seed known PIDs so processes already running at startup don't trigger alerts
+        for name_lower in REMOTE_ACCESS_PROCESSES:
+            try:
+                for proc in c.Win32_Process(Name=name_lower):
+                    self._known_remote_pids.add(proc.ProcessId)
+            except Exception:
+                pass
+
         while self._running:
             try:
                 for name_lower, tool in REMOTE_ACCESS_PROCESSES.items():
@@ -164,8 +181,19 @@ class RDPMonitor:
              [21, 22, 23, 24, 25]),
         ]
 
-        # Track last read position
+        # Seed last_record to current position so old events don't fire on startup
         last_record = {}
+        for log_name, _ in log_types:
+            try:
+                hand = win32evtlog.OpenEventLog(server, log_name)
+                flags = (win32evtlog.EVENTLOG_BACKWARDS_READ |
+                         win32evtlog.EVENTLOG_SEQUENTIAL_READ)
+                events = win32evtlog.ReadEventLog(hand, flags, 0)
+                if events:
+                    last_record[log_name] = events[0].RecordNumber
+                win32evtlog.CloseEventLog(hand)
+            except Exception:
+                pass
 
         while self._running:
             for log_name, event_ids in log_types:
