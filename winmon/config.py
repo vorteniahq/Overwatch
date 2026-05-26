@@ -20,6 +20,11 @@ DEFAULT_CONFIG = {
         "days": [0, 1, 2, 3, 4]  # Mon-Fri (0=Monday)
     },
     "monitors": {
+        "session": {
+            "enabled": True,
+            "alert": True,
+            "description": "Workstation lock and unlock events"
+        },
         "login": {
             "enabled": True,
             "alert": True,
@@ -46,13 +51,28 @@ DEFAULT_CONFIG = {
             "alert": True,
             "description": "RDP and TeamViewer connections"
         },
+        "network": {
+            "enabled": True,
+            "alert": True,
+            "description": "Wi-Fi, IP, and network connection changes",
+            "watch_outbound": False
+        },
+        "power": {
+            "enabled": True,
+            "alert": True,
+            "description": "Laptop power and battery (auto-idle on desktops)"
+        },
         "filesystem": {
             "enabled": True,
             "alert": True,
             "description": "File system changes in watched paths",
+            # Default to the user folders a snoop would actually look in.
+            # %USERPROFILE% is expanded at runtime by the filesystem monitor.
             "watch_paths": [
-                "C:\\Users\\Public",
-                "C:\\Windows\\Temp"
+                "%USERPROFILE%\\Documents",
+                "%USERPROFILE%\\Desktop",
+                "%USERPROFILE%\\Downloads",
+                "%USERPROFILE%\\Pictures"
             ],
             "extensions_watchlist": [
                 ".exe", ".dll", ".bat", ".cmd", ".ps1", ".vbs",
@@ -66,9 +86,18 @@ DEFAULT_CONFIG = {
         "cleanup_days": 30
     },
     "general": {
+        "machine_name": "",
+        "display_mode": "basic",
         "log_level": "INFO",
         "start_minimized": True,
-        "autostart": False
+        "autostart": False,
+        # When True, any login / unlock / USB / remote-access event escalates to
+        # critical severity and forces a Telegram ping. Toggle from the dashboard.
+        "away_mode": False,
+    },
+    "api": {
+        "host": "127.0.0.1",
+        "port": 7373
     }
 }
 

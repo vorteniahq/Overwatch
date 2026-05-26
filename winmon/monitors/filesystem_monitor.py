@@ -6,6 +6,8 @@ import threading
 import time
 from pathlib import Path
 
+from winmon.intel import friendly_summary, maybe_escalate
+
 log = logging.getLogger("winmon.monitors.filesystem")
 
 
@@ -27,8 +29,10 @@ class FileSystemMonitor:
             return
         self._running = True
 
-        # Try to use Windows native API first, fallback to polling
-        watch_paths = self._config.get("monitors", "filesystem", "watch_paths") or []
+        # Try to use Windows native API first, fallback to polling.
+        # Expand env vars (e.g. %USERPROFILE%) so config can use portable defaults.
+        raw_paths = self._config.get("monitors", "filesystem", "watch_paths") or []
+        watch_paths = [os.path.expandvars(p) for p in raw_paths]
 
         for path in watch_paths:
             if os.path.isdir(path):
@@ -155,6 +159,8 @@ class FileSystemMonitor:
 
         is_suspicious = ext in watched_exts
         severity = "warning" if is_suspicious else "info"
+        severity, escalated = maybe_escalate(self._config, self.CATEGORY, severity)
+        is_suspicious = is_suspicious or escalated
 
         summary = f"File {action}: {os.path.basename(filepath)}"
         details = (
@@ -171,8 +177,16 @@ class FileSystemMonitor:
         except OSError:
             pass
 
-        self._db.log_event(self.CATEGORY, summary, details, severity,
-                           source="filesystem", alerted=is_suspicious)
+        friendly = friendly_summary(self.CATEGORY, summary=summary, details=details)
+
+        self._db.log_event(
+            self.CATEGORY, summary, details, severity,
+            source="filesystem", alerted=is_suspicious,
+            friendly_summary=friendly,
+            dedup_key=f"fs:{action}:{filepath}",
+        )
 
         if is_suspicious and self._config.get("monitors", "filesystem", "alert"):
-            self._notifier.send_alert(self.CATEGORY, summary, details, severity)
+            self._notifier.send_alert(
+                self.CATEGORY, friendly or summary, details, severity
+            )

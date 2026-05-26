@@ -4,6 +4,8 @@ import logging
 import threading
 import time
 
+from winmon.intel import friendly_summary, maybe_escalate
+
 log = logging.getLogger("winmon.monitors.usb")
 
 
@@ -125,8 +127,21 @@ class USBMonitor:
         details = f"DeviceID: {dev_id}\nName: {dev_name}"
 
         severity = "warning" if action == "connected" else "info"
-        self._db.log_event(self.CATEGORY, summary, details, severity,
-                           source="WMI", alerted=True)
+        severity, escalated = maybe_escalate(self._config, self.CATEGORY, severity)
+        friendly = friendly_summary(self.CATEGORY, summary=summary, details=details)
 
-        if self._config.get("monitors", "usb", "alert"):
-            self._notifier.send_alert(self.CATEGORY, summary, details, severity)
+        is_alert = escalated or (action == "connected")
+        # Coarse dedup key — one physical plug-in often fires many sub-device
+        # events. Bucket them all into one row + one alert per 60s window.
+        _id, is_update = self._db.log_event(
+            self.CATEGORY, summary, details, severity,
+            source="WMI", alerted=is_alert,
+            friendly_summary=friendly,
+            dedup_key=f"usb:{action}",
+        )
+
+        # Only Telegram-ping the first event in the window, not the dedup hits.
+        if is_alert and not is_update and self._config.get("monitors", "usb", "alert"):
+            self._notifier.send_alert(
+                self.CATEGORY, friendly or summary, details, severity
+            )

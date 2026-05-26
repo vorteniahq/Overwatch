@@ -5,6 +5,8 @@ import threading
 import time
 from datetime import datetime
 
+from winmon.intel import friendly_summary, maybe_escalate
+
 log = logging.getLogger("winmon.monitors.login")
 
 
@@ -86,16 +88,33 @@ class LoginMonitor:
                         f"StartTime: {session.StartTime}"
                     )
 
-                    severity = "warning" if logon_type == 10 else "info"
-                    self._db.log_event(self.CATEGORY, summary, details, severity,
-                                       source="WMI", alerted=True)
+                    # Snoop-detection priority: every interactive login is worth knowing about.
+                    # RDP (type 10) is critical because it means someone connected remotely.
+                    severity = "critical" if logon_type == 10 else "warning"
+                    severity, _escalated = maybe_escalate(self._config, self.CATEGORY, severity)
+                    friendly = friendly_summary(
+                        self.CATEGORY, summary=summary, details=details,
+                        analysis={"logon_type": logon_type, "username": username}
+                    )
+                    dedup_key = f"login:new:{username}:{logon_type}"
+                    self._db.log_event(
+                        self.CATEGORY, summary, details, severity,
+                        source="WMI", alerted=True,
+                        friendly_summary=friendly,
+                        dedup_key=dedup_key,
+                    )
                     if self._config.get("monitors", "login", "alert"):
-                        self._notifier.send_alert(self.CATEGORY, summary, details, severity)
+                        self._notifier.send_alert(
+                            self.CATEGORY, friendly or summary, details, severity
+                        )
 
                 for sid in gone_ids:
-                    # Logoff - less critical, just log
-                    self._db.log_event(self.CATEGORY, f"Session ended: {sid}",
-                                       severity="info", source="WMI")
+                    # Logoff — quieter; dedup so we don't spam on every poll cycle
+                    self._db.log_event(
+                        self.CATEGORY, f"Session ended: {sid}",
+                        severity="info", source="WMI",
+                        dedup_key=f"login:end:{sid}",
+                    )
 
                 self._known_sessions = current_ids
 

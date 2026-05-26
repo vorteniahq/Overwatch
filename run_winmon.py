@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 """
 Overwatch - Windows Security Monitor
-Run this file to start. Everything is controlled from the system tray icon.
+Native dashboard window + system tray. Everything else is controlled from the tray.
 """
 
 import os
 import sys
 import logging
 import logging.handlers
+import threading
 import ctypes
+
+
+log = logging.getLogger("winmon.main")
 
 
 def setup_logging():
@@ -18,7 +22,6 @@ def setup_logging():
     os.makedirs(log_dir, exist_ok=True)
 
     log_file = os.path.join(log_dir, "overwatch.log")
-
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
     file_handler = logging.handlers.RotatingFileHandler(
@@ -30,7 +33,6 @@ def setup_logging():
     root.setLevel(logging.INFO)
     root.addHandler(file_handler)
 
-    # Console output when running in a terminal
     if sys.stdout and sys.stdout.isatty():
         console = logging.StreamHandler()
         console.setFormatter(fmt)
@@ -45,17 +47,16 @@ def single_instance():
             0,
             "Overwatch is already running.\nCheck your system tray.",
             "Overwatch",
-            0x40  # MB_ICONINFORMATION
+            0x40,
         )
         sys.exit(0)
-    return mutex  # Keep reference alive for process lifetime
+    return mutex
 
 
 def main():
     _mutex = single_instance()
     setup_logging()
 
-    # Ensure winmon package is on the path
     base_dir = os.path.dirname(os.path.abspath(__file__))
     if base_dir not in sys.path:
         sys.path.insert(0, base_dir)
@@ -68,11 +69,34 @@ def main():
     engine = MonitorEngine(config)
     engine.start()
 
-    tray = TrayApp(engine)
+    # Try to build a native dashboard window; fall back to default browser on failure.
+    window = None
     try:
-        tray.run()  # Blocking — right-click tray icon for all controls
-    except KeyboardInterrupt:
-        engine.stop()
+        from winmon.gui.window import DashboardWindow
+        window = DashboardWindow(engine.api.url)
+        window.create()
+    except Exception as e:
+        log.warning("Native dashboard window unavailable, will use browser: %s", e)
+        window = None
+
+    tray = TrayApp(engine, dashboard_window=window)
+
+    if window is not None:
+        # PyWebView must own the main thread on Windows.
+        # Tray runs on a background thread; close-from-tray exits the process via os._exit.
+        threading.Thread(target=tray.run, name="overwatch-tray", daemon=True).start()
+        try:
+            window.run_blocking()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            engine.stop()
+    else:
+        # No native window — tray on main thread, browser handles dashboard.
+        try:
+            tray.run()
+        except KeyboardInterrupt:
+            engine.stop()
 
 
 if __name__ == "__main__":

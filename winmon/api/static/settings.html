@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-mode="basic">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Overwatch — Settings</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/settings.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <a href="/" class="back-link" title="Back to dashboard">←</a>
+      <span class="brand-mark">◆</span>
+      <span class="brand-name">OVERWATCH</span>
+      <span class="brand-sep">/</span>
+      <span class="brand-machine">SETTINGS</span>
+    </div>
+    <div class="topbar-actions">
+      <div class="mode-toggle" role="tablist" aria-label="Display mode">
+        <button class="mode-tab" data-mode="basic"    aria-selected="true">BASIC</button>
+        <button class="mode-tab" data-mode="advanced" aria-selected="false">ADVANCED</button>
+      </div>
+      <span class="save-indicator" id="save-indicator"></span>
+      <button class="icon-btn" id="theme-btn" title="Toggle theme">☾</button>
+    </div>
+  </header>
+
+  <main class="settings-grid">
+
+    <!-- 01 — GENERAL -->
+    <section class="card setting-section" data-section="general">
+      <div class="section-num">01</div>
+      <div class="section-body">
+        <h2>GENERAL</h2>
+        <div class="field">
+          <label>Machine name <span class="hint">shown in Telegram alerts</span></label>
+          <input type="text" data-config="general.machine_name" placeholder="e.g. WORKSTATION-01">
+        </div>
+        <div class="field">
+          <label>Log level</label>
+          <select data-config="general.log_level">
+            <option value="DEBUG">DEBUG</option>
+            <option value="INFO">INFO</option>
+            <option value="WARNING">WARNING</option>
+            <option value="ERROR">ERROR</option>
+          </select>
+        </div>
+        <div class="field row">
+          <label class="check"><input type="checkbox" data-config="general.start_minimized"> Start minimized to tray</label>
+        </div>
+        <div class="field row">
+          <label class="check"><input type="checkbox" data-config="general.autostart"> Start with Windows</label>
+        </div>
+        <div class="actions">
+          <button class="btn primary" data-save="general">Save</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 02 — TELEGRAM -->
+    <section class="card setting-section" data-section="telegram">
+      <div class="section-num">02</div>
+      <div class="section-body">
+        <h2 data-basic="NOTIFICATIONS" data-advanced="TELEGRAM">NOTIFICATIONS</h2>
+        <div class="field">
+          <label>Bot token <span class="hint" id="token-status">—</span></label>
+          <input type="password" data-config="telegram.bot_token" placeholder="123456:ABC-DEF...">
+        </div>
+        <div class="field">
+          <label>Chat ID</label>
+          <input type="text" data-config="telegram.chat_id" placeholder="-1001234567890">
+        </div>
+        <div class="field row">
+          <label class="check"><input type="checkbox" data-config="telegram.enabled"> Enabled</label>
+        </div>
+        <div class="actions">
+          <button class="btn primary" data-save="telegram">Save</button>
+          <button class="btn" id="test-telegram-btn">Send Test Alert</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 — SILENT HOURS -->
+    <section class="card setting-section" data-section="silent_hours">
+      <div class="section-num">03</div>
+      <div class="section-body">
+        <h2 data-basic="QUIET HOURS" data-advanced="SILENT HOURS">QUIET HOURS</h2>
+        <p class="hint-block">During silent hours, events are still logged to the database but Telegram alerts are suppressed.</p>
+        <div class="field row">
+          <label class="check"><input type="checkbox" data-config="silent_hours.enabled"> Enabled</label>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Start</label>
+            <input type="time" data-config-time="silent_hours.start">
+          </div>
+          <div class="field">
+            <label>End</label>
+            <input type="time" data-config-time="silent_hours.end">
+          </div>
+        </div>
+        <div class="field">
+          <label>Days</label>
+          <div class="day-picker" id="day-picker">
+            <button type="button" data-day="0">M</button>
+            <button type="button" data-day="1">T</button>
+            <button type="button" data-day="2">W</button>
+            <button type="button" data-day="3">T</button>
+            <button type="button" data-day="4">F</button>
+            <button type="button" data-day="5">S</button>
+            <button type="button" data-day="6">S</button>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn primary" data-save="silent_hours">Save</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04 — MONITORS -->
+    <section class="card setting-section" data-section="monitors">
+      <div class="section-num">04</div>
+      <div class="section-body">
+        <h2>MONITORS</h2>
+        <div id="monitor-toggles"></div>
+        <div class="actions">
+          <button class="btn primary" data-save="monitors">Save</button>
+          <button class="btn" id="restart-after-save-btn">Save &amp; Restart Monitors</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 05 — PROCESS WATCHLIST -->
+    <section class="card setting-section advanced-only" data-section="watchlist">
+      <div class="section-num">05</div>
+      <div class="section-body">
+        <h2>PROCESS WATCHLIST</h2>
+        <p class="hint-block">One executable name per line. Alerts fire when any of these processes start.</p>
+        <textarea data-list="monitors.process.watchlist" rows="8" spellcheck="false"></textarea>
+        <div class="actions">
+          <button class="btn primary" data-save="watchlist">Save</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 06 — FILESYSTEM -->
+    <section class="card setting-section advanced-only" data-section="filesystem">
+      <div class="section-num">06</div>
+      <div class="section-body">
+        <h2>FILESYSTEM</h2>
+        <div class="field">
+          <label>Watch paths <span class="hint">one per line</span></label>
+          <textarea data-list="monitors.filesystem.watch_paths" rows="4" spellcheck="false"></textarea>
+        </div>
+        <div class="field">
+          <label>Extension watchlist <span class="hint">one per line, include the dot</span></label>
+          <textarea data-list="monitors.filesystem.extensions_watchlist" rows="4" spellcheck="false"></textarea>
+        </div>
+        <div class="actions">
+          <button class="btn primary" data-save="filesystem">Save</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 07 — DATABASE -->
+    <section class="card setting-section advanced-only" data-section="database">
+      <div class="section-num">07</div>
+      <div class="section-body">
+        <h2>DATABASE</h2>
+        <div class="field">
+          <label>Path</label>
+          <input type="text" data-config="database.path" readonly>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Max events</label>
+            <input type="number" data-config="database.max_events" min="1000" step="1000">
+          </div>
+          <div class="field">
+            <label>Cleanup after (days)</label>
+            <input type="number" data-config="database.cleanup_days" min="1" step="1">
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn primary" data-save="database">Save</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <span>Overwatch v1.1.0</span>
+    <span class="dim">·</span>
+    <span>by <a href="https://vortenia.com" target="_blank" rel="noopener">Vortenia</a></span>
+  </footer>
+
+  <script src="/static/settings.js"></script>
+</body>
+</html>

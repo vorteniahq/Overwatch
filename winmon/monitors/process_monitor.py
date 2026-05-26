@@ -1,14 +1,15 @@
-"""Monitor suspicious process creation events via WMI."""
+"""Process creation monitor with parent-tree, cmdline scoring, and signing analysis."""
 
 import logging
 import threading
-import os
+
+from winmon.intel import analyse_process, friendly_summary
 
 log = logging.getLogger("winmon.monitors.process")
 
 
 class ProcessMonitor:
-    """Watches for process creation events, alerting on watchlisted executables."""
+    """Watches new processes and scores each on a 0-100 risk scale."""
 
     CATEGORY = "process"
 
@@ -33,8 +34,9 @@ class ProcessMonitor:
         if self._thread:
             self._thread.join(timeout=10)
 
+    # ---- main loop --------------------------------------------------------
+
     def _watch_loop(self):
-        """Subscribe to WMI process creation events."""
         try:
             import wmi
             import pythoncom
@@ -49,94 +51,121 @@ class ProcessMonitor:
                         new_proc = watcher(timeout_ms=2000)
                     except wmi.x_wmi_timed_out:
                         continue
-
-                    self._handle_process(new_proc)
+                    self._handle_wmi_event(new_proc)
             finally:
                 pythoncom.CoUninitialize()
 
         except ImportError:
-            log.error("wmi/pythoncom not available - process monitor disabled")
+            log.error("wmi/pythoncom not available — falling back to psutil polling")
             self._fallback_poll()
         except Exception as e:
             log.error("Process monitor error: %s", e)
 
     def _fallback_poll(self):
-        """Fallback: poll process list if WMI events fail."""
         import time
         try:
             import psutil
         except ImportError:
-            log.error("Neither wmi nor psutil available for process monitoring")
+            log.error("Neither wmi nor psutil available — process monitor stopped")
             return
 
         known_pids = {p.pid for p in psutil.process_iter()}
         while self._running:
             try:
-                current = {}
-                for p in psutil.process_iter(["pid", "name", "exe", "username", "cmdline"]):
-                    current[p.pid] = p.info
-
+                current = {p.pid: p.info for p in psutil.process_iter(
+                    ["pid", "name", "exe", "username", "cmdline"]
+                )}
                 new_pids = set(current.keys()) - known_pids
                 for pid in new_pids:
-                    info = current.get(pid)
-                    if info:
-                        self._handle_process_info(
-                            info.get("name", ""),
-                            info.get("exe", ""),
-                            pid,
-                            info.get("username", ""),
-                            " ".join(info.get("cmdline") or [])
-                        )
+                    info = current[pid]
+                    self._handle(
+                        name=info.get("name") or "",
+                        exe=info.get("exe") or "",
+                        pid=pid,
+                        owner=info.get("username") or "",
+                        cmd=" ".join(info.get("cmdline") or []),
+                        parent_pid=None,
+                    )
                 known_pids = set(current.keys())
             except Exception as e:
                 log.error("Process poll error: %s", e)
             time.sleep(3)
 
-    def _handle_process(self, proc):
-        """Handle a WMI process creation event."""
+    # ---- event handling ---------------------------------------------------
+
+    def _handle_wmi_event(self, proc):
         try:
             name = proc.Name or ""
             exe = proc.ExecutablePath or ""
             pid = proc.ProcessId
             cmd = proc.CommandLine or ""
-
-            # Get parent info
             parent_id = proc.ParentProcessId
+
+            # WMI's CommandLine is often empty for shell-launched processes;
+            # fall back to psutil so the scoring rules have something to match.
+            if not cmd and pid:
+                try:
+                    import psutil
+                    p = psutil.Process(pid)
+                    cmd = " ".join(p.cmdline() or [])
+                    if not exe:
+                        try:
+                            exe = p.exe() or ""
+                        except (psutil.AccessDenied, psutil.NoSuchProcess):
+                            pass
+                except Exception:
+                    pass  # process may have exited already — proceed with WMI fields
+
             owner = ""
             try:
                 result = proc.GetOwner()
-                if result[0] == 0:
-                    owner = f"{result[1]}\\{result[2]}" if result[1] else result[2]
+                if result and result[0] == 0:
+                    owner = f"{result[1]}\\{result[2]}" if result[1] else (result[2] or "")
             except Exception:
                 pass
 
-            self._handle_process_info(name, exe, pid, owner, cmd, parent_id)
+            self._handle(name=name, exe=exe, pid=pid, owner=owner,
+                         cmd=cmd, parent_pid=parent_id)
         except Exception as e:
             log.error("Error handling process event: %s", e)
 
-    def _handle_process_info(self, name, exe, pid, owner, cmd, parent_id=None):
-        """Evaluate and log/alert on process creation."""
-        watchlist = self._config.get("monitors", "process", "watchlist") or []
+    def _handle(self, *, name: str, exe: str, pid: int, owner: str,
+                cmd: str, parent_pid):
+        """Score the process and log it (with dedup) — alert on warning+."""
+        analysis = analyse_process(
+            name=name, exe=exe, cmd=cmd,
+            pid=pid, parent_pid=parent_pid, owner=owner,
+        )
 
-        name_lower = (name or "").lower()
-        is_watched = any(w.lower() == name_lower for w in watchlist)
-
-        # Always log to database
+        friendly = friendly_summary("process", name=name, exe=exe, analysis=analysis)
+        summary = f"Process started: {name}"
         details = (
             f"Name: {name}\n"
             f"Path: {exe}\n"
             f"PID: {pid}\n"
             f"Owner: {owner}\n"
-            f"CommandLine: {cmd}"
+            f"Parent PID: {parent_pid}\n"
+            f"Parent chain: {' <- '.join(analysis['parent_tree']) or '?'}\n"
+            f"Signing: {analysis['signature']}\n"
+            f"Confidence: {analysis['confidence']}\n"
+            f"Reasons: {', '.join(analysis['reasons']) or '-'}\n"
+            f"MITRE: {', '.join(analysis['attack_tags']) or '-'}\n"
+            f"Command line: {cmd}"
         )
-        if parent_id:
-            details += f"\nParentPID: {parent_id}"
 
-        severity = "warning" if is_watched else "info"
-        self._db.log_event(self.CATEGORY, f"Process started: {name}",
-                           details, severity, source="WMI",
-                           alerted=is_watched)
+        is_alert = analysis["severity"] in ("warning", "critical")
+        if is_alert and self._config.get("monitors", "process", "alert"):
+            alert_summary = friendly or f"Suspicious process: {name}"
+            self._notifier.send_alert(self.CATEGORY, alert_summary,
+                                      details, analysis["severity"])
 
-        if is_watched and self._config.get("monitors", "process", "alert"):
-            summary = f"Suspicious process: {name}"
-            self._notifier.send_alert(self.CATEGORY, summary, details, severity)
+        self._db.log_event(
+            self.CATEGORY, summary, details,
+            severity=analysis["severity"], source="WMI", alerted=is_alert,
+            friendly_summary=friendly,
+            attack_tags=analysis["attack_tags"],
+            parent_tree=analysis["parent_tree"],
+            signature=analysis["signature"],
+            confidence=analysis["confidence"],
+            dedup_key=analysis["dedup_key"],
+        )

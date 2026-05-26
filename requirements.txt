@@ -1,13 +1,17 @@
 # Overwatch - Windows Security Monitor Dependencies
-# Core (required)
+
+# Core
 wmi>=1.5.1
 pywin32>=306
 psutil>=5.9.0
 
-# GUI
+# Tray icon
 pystray>=0.19.5
 Pillow>=10.0.0
 
-# Optional: already included in Python stdlib
-# tkinter (included with Python)
-# sqlite3 (included with Python)
+# Web dashboard (replaces Tkinter)
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pywebview>=5.0
+
+# stdlib: sqlite3, threading, webbrowser

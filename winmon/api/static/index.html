@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-mode="basic">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Overwatch</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <span class="brand-name">OVERWATCH</span>
+      <span class="brand-sep">/</span>
+      <span class="brand-machine" id="machine-name">—</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="away-pill" id="away-btn" data-active="false" title="Toggle Away Mode">
+        <span class="away-dot"></span>
+        <span class="away-label">AWAY MODE</span>
+      </button>
+      <div class="mode-toggle" role="tablist" aria-label="Display mode">
+        <button class="mode-tab" data-mode="basic"    aria-selected="true">BASIC</button>
+        <button class="mode-tab" data-mode="advanced" aria-selected="false">ADVANCED</button>
+      </div>
+      <span class="status-pill" id="status-pill" data-state="running">
+        <span class="status-dot"></span>
+        <span id="status-label">running</span>
+      </span>
+      <button class="icon-btn" id="pause-btn" title="Pause monitoring">⏸</button>
+      <button class="icon-btn" id="restart-btn" title="Restart monitors">↻</button>
+      <a class="icon-btn" href="/settings" title="Settings">⚙</a>
+      <button class="icon-btn" id="theme-btn" title="Toggle theme">☾</button>
+    </div>
+  </header>
+
+  <main class="grid">
+
+    <section class="card stats" aria-label="Statistics">
+      <div class="stat">
+        <div class="stat-label" data-basic="Things today" data-advanced="01 — TODAY">Things today</div>
+        <div class="stat-value" id="stat-today">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label" data-basic="Last hour" data-advanced="02 — LAST HOUR">Last hour</div>
+        <div class="stat-value" id="stat-hour">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label" data-basic="Take action" data-advanced="03 — CRITICAL">Take action</div>
+        <div class="stat-value sev-critical" id="stat-critical">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label" data-basic="Worth a look" data-advanced="04 — WARNING">Worth a look</div>
+        <div class="stat-value sev-warning" id="stat-warning">0</div>
+      </div>
+      <div class="stat advanced-only">
+        <div class="stat-label">05 — INFO</div>
+        <div class="stat-value sev-info" id="stat-info">0</div>
+      </div>
+    </section>
+
+    <section class="card monitors" aria-label="Monitors">
+      <div class="card-header">
+        <h2 data-basic="WATCHING FOR" data-advanced="MONITORS">WATCHING FOR</h2>
+        <span class="dim" id="monitor-count">—</span>
+      </div>
+      <div class="monitor-grid" id="monitor-grid"></div>
+    </section>
+
+    <section class="card events" aria-label="Events">
+      <div class="card-header">
+        <h2 data-basic="WHAT'S HAPPENING" data-advanced="EVENTS">WHAT'S HAPPENING</h2>
+        <div class="filters">
+          <select id="filter-category" class="advanced-only">
+            <option value="">all categories</option>
+            <option value="session">session</option>
+            <option value="login">login</option>
+            <option value="process">process</option>
+            <option value="usb">usb</option>
+            <option value="rdp">rdp</option>
+            <option value="filesystem">filesystem</option>
+            <option value="network">network</option>
+            <option value="power">power</option>
+            <option value="system">system</option>
+          </select>
+          <select id="filter-severity" class="advanced-only">
+            <option value="">all severities</option>
+            <option value="critical">critical</option>
+            <option value="warning">warning</option>
+            <option value="info">info</option>
+          </select>
+          <span class="live-indicator" id="live-indicator">
+            <span class="live-dot"></span> live
+          </span>
+        </div>
+      </div>
+      <div class="event-feed" id="event-feed"></div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <span>Overwatch v1.1.0</span>
+    <span class="dim">·</span>
+    <span>by <a href="https://vortenia.com" target="_blank" rel="noopener">Vortenia</a></span>
+  </footer>
+
+  <template id="event-row-tmpl">
+    <div class="event-row">
+      <div class="ev-time"></div>
+      <div class="ev-sev"></div>
+      <div class="ev-cat"></div>
+      <div class="ev-summary">
+        <span class="ev-text"></span>
+        <span class="ev-count"></span>
+        <span class="ev-tags"></span>
+      </div>
+      <button class="ev-expand" title="Toggle details">+</button>
+      <div class="ev-details"></div>
+    </div>
+  </template>
+
+  <template id="monitor-card-tmpl">
+    <div class="monitor-card">
+      <div class="mon-dot"></div>
+      <div class="mon-name"></div>
+      <div class="mon-state"></div>
+    </div>
+  </template>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
