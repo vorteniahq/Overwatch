@@ -9,17 +9,23 @@ Real-time Windows security monitoring with Telegram alerts, built for snoop dete
 
 ## Quick Start
 
+**Release exe** (no Python needed):
+
+1. [Download Overwatch.exe](https://github.com/Safetypinz/Overwatch/releases/latest) and run it. The exe is unsigned, so Windows SmartScreen warns on first run: click **More info**, then **Run anyway**. A shield icon appears in the system tray.
+2. Right-click the tray icon for Dashboard, Settings, Test Alert, Pause, Restart, Exit.
+
+**From source:**
+
 1. Run `setup.ps1` once to create the Python venv and install dependencies:
    ```powershell
    powershell -ExecutionPolicy Bypass -File setup.ps1
    ```
-2. Double-click **`Overwatch.bat`**. A shield icon appears in the system tray.
-3. Right-click the tray icon for Dashboard, Settings, Test Alert, Pause, Restart, Exit.
+2. Double-click **`Overwatch.bat`**. Same tray icon, same menu.
 
 ## Requirements
 
 - Windows 10 or 11
-- Python 3.8–3.12 (3.12 recommended; 3.13+ lacks pre-built wheels for `httptools` / `psutil`)
+- Python 3.8–3.12, source install only; the release exe is self-contained (3.12 recommended; 3.13+ lacks pre-built wheels for `httptools` / `psutil`)
 - Administrator rights for some monitors (login/process via WMI) and for service mode
 - WebView2 runtime for the native dashboard window (preinstalled on Windows 10/11; falls back to your default browser if unavailable)
 
